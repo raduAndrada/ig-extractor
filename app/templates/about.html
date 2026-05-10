@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}About - Instagram Organizer{% endblock %}
+
+{% block content %}
+<div class="about-page">
+    <h1>About Instagram Saved Posts Organizer</h1>
+    
+    <div class="about-section">
+        <h2>📱 What is this?</h2>
+        <p>
+            A web application that helps you extract, organize, and search your Instagram saved posts.
+            Instead of scrolling through hundreds of saved posts on Instagram, you can organize them
+            with categories, tags, and powerful search.
+        </p>
+    </div>
+
+    <div class="about-section">
+        <h2>✨ Features</h2>
+        <ul>
+            <li>📥 Extract all your saved Instagram posts</li>
+            <li>🤖 AI-powered automatic categorization suggestions</li>
+            <li>🏷️ Manual tagging and organization</li>
+            <li>🔍 Full-text search across captions and hashtags</li>
+            <li>📊 Export your organized collection</li>
+            <li>💾 Everything stored locally on your machine</li>
+        </ul>
+    </div>
+
+    <div class="about-section">
+        <h2>🔒 Privacy</h2>
+        <p>
+            All your data is stored locally on your computer. We don't send your posts or credentials
+            to any external servers (except when using OpenAI for AI categorization, which is optional).
+        </p>
+    </div>
+
+    <div class="about-section">
+        <h2>🛠️ Technology</h2>
+        <ul>
+            <li><strong>Backend:</strong> Python, Flask, SQLAlchemy</li>
+            <li><strong>Database:</strong> SQLite with FTS5</li>
+            <li><strong>Instagram:</strong> Instaloader</li>
+            <li><strong>AI:</strong> OpenAI API / Local models (CLIP)</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

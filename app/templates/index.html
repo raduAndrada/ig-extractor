@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="header">
+        <h1>📱 Instagram Saved Posts</h1>
+        <p class="subtitle">Organize and search your saved Instagram posts</p>
+    </div>
+
+    <!-- Login Status Banner -->
+    <div id="loginBanner" style="display: none;" class="alert alert-warning">
+        ⚠️ Not connected to Instagram. <a href="{{ url_for('main.settings') }}">Go to Settings</a> to connect your account.
+    </div>
+
+    <div class="action-cards">
+        <div class="card">
+            <h3>📥 Fetch Posts</h3>
+            <p>Sync your saved posts from Instagram</p>
+            <div id="fetchStatus"></div>
+            <button id="fetchBtn" class="btn btn-primary" onclick="fetchPosts()">Fetch Now</button>
+            <div id="fetchProgress" style="display: none; margin-top: 1rem;">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+                <p id="progressText" class="progress-text"></p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>🔍 Search</h3>
+            <p>Find posts by caption, hashtags, or categories</p>
+            <form action="{{ url_for('posts.list_posts') }}" method="get">
+                <input type="text" name="search" placeholder="Search posts..." class="search-input">
+                <button type="submit" class="btn">Search</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3>🏷️ Categories</h3>
+            <p>Manage your post categories</p>
+            <a href="{{ url_for('categories.list_categories') }}" class="btn">Manage</a>
+        </div>
+    </div>
+
+    <div class="stats">
+        <h2>Quick Stats</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">{{ post_count }}</div>
+                <div class="stat-label">Total Posts</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ category_count }}</div>
+                <div class="stat-label">Categories</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ tag_count }}</div>
+                <div class="stat-label">Tags</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ uncategorized_count }}</div>
+                <div class="stat-label">Uncategorized</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="recent-posts">
+        <h2>Recent Posts</h2>
+        <a href="{{ url_for('posts.list_posts') }}" class="btn btn-link">View All →</a>
+    </div>
+</div>
+
+<style>
+.alert {
+    padding: 1rem;
+    border-radius: 0.375rem;
+    margin-bottom: 2rem;
+}
+
+.alert-warning {
+    background: #FEF3C7;
+    color: #92400E;
+    border: 1px solid #FCD34D;
+}
+
+.alert a {
+    color: #92400E;
+    font-weight: bold;
+    text-decoration: underline;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background: var(--gray-200);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--primary);
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.progress-text {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--gray-600);
+}
+
+#fetchStatus {
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+}
+</style>
+
+<script>
+// Check login status on load
+document.addEventListener('DOMContentLoaded', checkLoginStatus);
+
+async function checkLoginStatus() {
+    try {
+        const response = await fetch('/instagram/status');
+        const data = await response.json();
+        
+        if (!data.logged_in) {
+            document.getElementById('loginBanner').style.display = 'block';
+            document.getElementById('fetchBtn').disabled = true;
+            document.getElementById('fetchBtn').textContent = 'Login Required';
+        }
+    } catch (error) {
+        console.error('Failed to check login status:', error);
+    }
+}
+
+async function fetchPosts() {
+    const btn = document.getElementById('fetchBtn');
+    const statusEl = document.getElementById('fetchStatus');
+    const progressEl = document.getElementById('fetchProgress');
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    
+    btn.disabled = true;
+    btn.textContent = 'Fetching...';
+    statusEl.textContent = 'Starting fetch...';
+    progressEl.style.display = 'block';
+    
+    try {
+        const response = await fetch('{{ url_for("posts.fetch_posts") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ max_posts: 50 })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            progressFill.style.width = '100%';
+            progressText.textContent = `Complete! ${data.new} new posts, ${data.skipped} already existed`;
+            statusEl.innerHTML = `<span style="color: var(--secondary);">✓ ${data.message}</span>`;
+            
+            // Reload after 2 seconds to show new stats
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            statusEl.innerHTML = `<span style="color: var(--danger);">✗ ${data.error || data.message}</span>`;
+            progressEl.style.display = 'none';
+        }
+    } catch (error) {
+        statusEl.innerHTML = `<span style="color: var(--danger);">✗ Error: ${error.message}</span>`;
+        progressEl.style.display = 'none';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Fetch Now';
+    }
+}
+</script>
+{% endblock %}

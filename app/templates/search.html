@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}Search - Instagram Organizer{% endblock %}
+
+{% block content %}
+<div class="search-page">
+    <div class="header">
+        <h1>🔍 Search Posts</h1>
+        <p>Lightning-fast full-text search powered by SQLite FTS5</p>
+    </div>
+
+    <div class="search-box-large">
+        <form id="searchForm" onsubmit="performSearch(event)">
+            <input 
+                type="text" 
+                id="searchQuery" 
+                name="q" 
+                placeholder="Search captions, usernames, hashtags..." 
+                class="search-input-large"
+                autofocus
+            >
+            <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+        
+        <div class="search-hints">
+            <strong>Search tips:</strong>
+            <span class="hint">"exact phrase"</span>
+            <span class="hint">word1 word2 (AND)</span>
+            <span class="hint">word1 OR word2</span>
+            <span class="hint">word1 NOT word2</span>
+        </div>
+    </div>
+
+    <div id="searchResults" class="search-results">
+        <!-- Results will be loaded here -->
+    </div>
+    
+    <div id="loadingIndicator" class="loading" style="display: none;">
+        <div class="spinner"></div>
+        <p>Searching...</p>
+    </div>
+</div>
+
+<style>
+.search-box-large {
+    max-width: 800px;
+    margin: 2rem auto;
+    text-align: center;
+}
+
+.search-input-large {
+    width: 100%;
+    padding: 1rem 1.5rem;
+    font-size: 1.125rem;
+    border: 2px solid var(--gray-300);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.search-input-large:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.search-hints {
+    font-size: 0.875rem;
+    color: var(--gray-600);
+    margin-top: 1rem;
+}
+
+.hint {
+    display: inline-block;
+    background: var(--gray-100);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    margin: 0.25rem;
+    font-family: monospace;
+}
+
+.search-results {
+    margin-top: 2rem;
+}
+
+.result-count {
+    color: var(--gray-600);
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+}
+
+.loading {
+    text-align: center;
+    padding: 4rem;
+}
+
+.spinner {
+    border: 4px solid var(--gray-200);
+    border-top: 4px solid var(--primary);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.empty-search {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--gray-600);
+}
+
+.empty-search h3 {
+    color: var(--gray-900);
+    margin-bottom: 0.5rem;
+}
+</style>
+
+<script>
+async function performSearch(event) {
+    event.preventDefault();
+    
+    const query = document.getElementById('searchQuery').value.trim();
+    const resultsEl = document.getElementById('searchResults');
+    const loadingEl = document.getElementById('loadingIndicator');
+    
+    if (!query) {
+        resultsEl.innerHTML = '<div class="empty-search"><h3>Enter a search query</h3><p>Try searching for words from post captions or usernames</p></div>';
+        return;
+    }
+    
+    // Show loading
+    loadingEl.style.display = 'block';
+    resultsEl.innerHTML = '';
+    
+    try {
+        const response = await fetch(`/posts/search?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        
+        loadingEl.style.display = 'none';
+        
+        if (data.posts && data.posts.length > 0) {
+            displayResults(data.posts, query, data.fallback);
+        } else {
+            resultsEl.innerHTML = `
+                <div class="empty-search">
+                    <h3>No results found</h3>
+                    <p>Try different keywords or check your spelling</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        loadingEl.style.display = 'none';
+        resultsEl.innerHTML = `
+            <div class="empty-search">
+                <h3>Search failed</h3>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+function displayResults(posts, query, isFallback) {
+    const resultsEl = document.getElementById('searchResults');
+    
+    let html = `
+        <div class="result-count">
+            Found ${posts.length} result${posts.length !== 1 ? 's' : ''} for "${query}"
+            ${isFallback ? ' <span style="color: var(--danger);">(using fallback search)</span>' : ''}
+        </div>
+        <div class="posts-grid">
+    `;
+    
+    posts.forEach(post => {
+        const caption = post.caption || '';
+        const truncated = caption.length > 150 ? caption.substring(0, 150) + '...' : caption;
+        
+        html += `
+            <div class="post-card">
+                <a href="/posts/${post.id}">
+                    ${post.thumbnail_path ? 
+                        `<img src="/${post.thumbnail_path}" alt="Post">` :
+                        '<div class="no-image">📷</div>'
+                    }
+                </a>
+                <div class="post-info">
+                    <div class="post-username">@${post.owner_username}</div>
+                    <div class="post-caption">${truncated}</div>
+                    <div class="post-meta">
+                        <span>❤️ ${post.likes_count}</span>
+                        <span>💬 ${post.comments_count}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    resultsEl.innerHTML = html;
+}
+
+// Load from URL parameter if present
+document.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    const query = params.get('q');
+    if (query) {
+        document.getElementById('searchQuery').value = query;
+        performSearch({ preventDefault: () => {} });
+    }
+});
+</script>
+{% endblock %}

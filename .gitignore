@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Flask
+instance/
+.webassets-cache
+
+# Database (keep structure, ignore data)
+*.db-journal
+data/instagram_organizer.db
+data/thumbnails/*.jpg
+data/thumbnails/*.jpeg
+data/thumbnails/*.png
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Instagram session
+session-*
+
+# Temporary files
+*.tmp
+*.bak

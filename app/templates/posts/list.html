@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Posts - Instagram Organizer{% endblock %}
+
+{% block content %}
+<div class="posts-page">
+    <div class="header">
+        <h1>All Saved Posts</h1>
+        <div class="header-actions">
+            <form action="{{ url_for('posts.list_posts') }}" method="get" class="search-form">
+                <input type="text" name="search" value="{{ search }}" placeholder="Search..." class="search-input">
+                <button type="submit" class="btn">Search</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="posts-grid">
+        {% if posts.items %}
+            {% for post in posts.items %}
+            <div class="post-card" data-post-id="{{ post.id }}">
+                <a href="{{ url_for('posts.view_post', post_id=post.id) }}">
+                    {% if post.thumbnail_path %}
+                    <img src="/{{ post.thumbnail_path }}" alt="Post thumbnail">
+                    {% else %}
+                    <div class="no-image">📷</div>
+                    {% endif %}
+                </a>
+                <div class="post-info">
+                    <div class="post-username">@{{ post.owner_username }}</div>
+                    <div class="post-caption">
+                        {{ post.caption[:100] }}{% if post.caption|length > 100 %}...{% endif %}
+                    </div>
+                    <div class="post-meta">
+                        <span>❤️ {{ post.likes_count }}</span>
+                        <span>💬 {{ post.comments_count }}</span>
+                    </div>
+                    <div class="post-categories">
+                        {% for category in post.categories %}
+                        <span class="category-badge" style="background-color: {{ category.color }}">
+                            {{ category.name }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <h3>No posts found</h3>
+                <p>Start by fetching your saved posts from Instagram</p>
+                <a href="{{ url_for('main.index') }}" class="btn btn-primary">Go to Dashboard</a>
+            </div>
+        {% endif %}
+    </div>
+
+    {% if posts.pages > 1 %}
+    <div class="pagination">
+        {% if posts.has_prev %}
+        <a href="{{ url_for('posts.list_posts', page=posts.prev_num, search=search) }}" class="btn">← Previous</a>
+        {% endif %}
+        
+        <span class="page-info">Page {{ posts.page }} of {{ posts.pages }}</span>
+        
+        {% if posts.has_next %}
+        <a href="{{ url_for('posts.list_posts', page=posts.next_num, search=search) }}" class="btn">Next →</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

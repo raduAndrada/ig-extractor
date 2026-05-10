@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Instagram Organizer{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+    <h1>Settings</h1>
+
+    <div class="settings-section">
+        <h2>Instagram Account</h2>
+        <div id="loginStatus" class="status-message"></div>
+        
+        <div id="loginForm" style="display: none;">
+            <form id="instagramLoginForm">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" placeholder="your_username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" placeholder="Your password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Connect Instagram</button>
+                <p class="help-text">Your credentials are stored locally and used only to fetch your saved posts.</p>
+            </form>
+        </div>
+        
+        <div id="twoFactorForm" style="display: none;">
+            <p>Two-factor authentication required. Please enter the code sent to your device.</p>
+            <form id="instagram2FAForm">
+                <div class="form-group">
+                    <label for="twoFactorCode">2FA Code</label>
+                    <input type="text" id="twoFactorCode" name="code" placeholder="123456" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Verify</button>
+                <button type="button" class="btn" onclick="cancel2FA()">Cancel</button>
+            </form>
+        </div>
+        
+        <div id="loggedInView" style="display: none;">
+            <p>✅ Connected as <strong id="connectedUsername"></strong></p>
+            <button class="btn" onclick="logout()">Disconnect</button>
+        </div>
+    </div>
+
+    <div class="settings-section">
+        <h2>Fetch Settings</h2>
+        <div class="form-group">
+            <label for="maxPosts">Max posts per fetch</label>
+            <input type="number" id="maxPosts" value="50" min="1" max="500">
+            <p class="help-text">Limit how many posts to fetch at once to avoid rate limiting</p>
+        </div>
+        <div class="form-group">
+            <label for="delay">Delay between requests (seconds)</label>
+            <input type="number" id="delay" value="5" min="1" max="60">
+            <p class="help-text">Instagram has rate limits. Higher delay = safer.</p>
+        </div>
+    </div>
+
+    <div class="settings-section">
+        <h2>AI Settings</h2>
+        <div class="form-group">
+            <label for="aiProvider">AI Provider</label>
+            <select id="aiProvider">
+                <option value="openai">OpenAI (Paid, High Quality)</option>
+                <option value="local">Local Models (Free, Slower)</option>
+                <option value="none">Disabled</option>
+            </select>
+        </div>
+        <div class="form-group" id="openaiKeyGroup">
+            <label for="apiKey">OpenAI API Key</label>
+            <input type="password" id="apiKey" placeholder="sk-...">
+            <p class="help-text">Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a></p>
+        </div>
+    </div>
+
+    <div class="settings-section">
+        <h2>Export Data</h2>
+        <p>Export your organized posts to JSON or CSV format</p>
+        <button class="btn" onclick="exportData('json')">📥 Export as JSON</button>
+        <button class="btn" onclick="exportData('csv')">📊 Export as CSV</button>
+        
+        <div id="exportStats" class="export-stats" style="margin-top: 1rem; display: none;">
+            <p><strong>Export Preview:</strong></p>
+            <ul id="statsList"></ul>
+        </div>
+    </div>
+</div>
+
+<style>
+.settings-section {
+    background: white;
+    padding: 2rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--gray-200);
+    margin-bottom: 2rem;
+}
+
+.settings-section h2 {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--gray-200);
+}
+
+.status-message {
+    padding: 1rem;
+    border-radius: 0.375rem;
+    margin-bottom: 1rem;
+}
+
+.status-message.success {
+    background: #DEF7EC;
+    color: #03543F;
+    border: 1px solid #84E1BC;
+}
+
+.status-message.error {
+    background: #FDE8E8;
+    color: #9B1C1C;
+    border: 1px solid #F98080;
+}
+
+.status-message.info {
+    background: #E1EFFE;
+    color: #1E429F;
+    border: 1px solid #76A9FA;
+}
+
+.help-text {
+    font-size: 0.875rem;
+    color: var(--gray-600);
+    margin-top: 0.25rem;
+}
+</style>
+
+<script>
+let pendingLogin = null;
+
+// Check login status on load
+document.addEventListener('DOMContentLoaded', checkLoginStatus);
+
+async function checkLoginStatus() {
+    try {
+        const response = await fetch('/instagram/status');
+        const data = await response.json();
+        
+        if (data.logged_in) {
+            showLoggedIn(data.username);
+        } else {
+            showLoginForm();
+        }
+    } catch (error) {
+        console.error('Failed to check status:', error);
+        showLoginForm();
+    }
+}
+
+function showLoginForm() {
+    document.getElementById('loginForm').style.display = 'block';
+    document.getElementById('loggedInView').style.display = 'none';
+    document.getElementById('twoFactorForm').style.display = 'none';
+}
+
+function showLoggedIn(username) {
+    document.getElementById('connectedUsername').textContent = username;
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('loggedInView').style.display = 'block';
+    document.getElementById('twoFactorForm').style.display = 'none';
+    showStatus('Connected to Instagram', 'success');
+}
+
+function show2FAForm() {
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('twoFactorForm').style.display = 'block';
+}
+
+function cancel2FA() {
+    showLoginForm();
+    pendingLogin = null;
+}
+
+function showStatus(message, type = 'info') {
+    const statusEl = document.getElementById('loginStatus');
+    statusEl.textContent = message;
+    statusEl.className = `status-message ${type}`;
+    statusEl.style.display = 'block';
+}
+
+async function logout() {
+    try {
+        const response = await fetch('/instagram/logout', { method: 'POST' });
+        const data = await response.json();
+        
+        if (data.success) {
+            showStatus('Disconnected from Instagram', 'info');
+            showLoginForm();
+        }
+    } catch (error) {
+        showStatus('Logout failed: ' + error.message, 'error');
+    }
+}
+
+document.getElementById('instagramLoginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    
+    showStatus('Connecting to Instagram...', 'info');
+    
+    try {
+        const response = await fetch('/instagram/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showStatus('Successfully connected!', 'success');
+            showLoggedIn(username);
+        } else if (data.requires_2fa) {
+            pendingLogin = { username, password };
+            showStatus('2FA required', 'info');
+            show2FAForm();
+        } else {
+            showStatus('Login failed: ' + data.message, 'error');
+        }
+    } catch (error) {
+        showStatus('Connection error: ' + error.message, 'error');
+    }
+});
+
+document.getElementById('instagram2FAForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    if (!pendingLogin) {
+        showStatus('Error: No pending login', 'error');
+        return;
+    }
+    
+    const code = document.getElementById('twoFactorCode').value;
+    
+    showStatus('Verifying 2FA code...', 'info');
+    
+    try {
+        const response = await fetch('/instagram/login-2fa', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: pendingLogin.username,
+                password: pendingLogin.password,
+                code: code
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showStatus('Successfully connected with 2FA!', 'success');
+            showLoggedIn(pendingLogin.username);
+            pendingLogin = null;
+        } else {
+            showStatus('2FA verification failed: ' + data.message, 'error');
+        }
+    } catch (error) {
+        showStatus('Verification error: ' + error.message, 'error');
+    }
+});
+
+function exportData(format) {
+    // Get stats first
+    fetch('/export/stats')
+        .then(r => r.json())
+        .then(data => {
+            const message = `Export ${data.total_posts} posts?\n\n` +
+                          `- ${data.categorized} with categories\n` +
+                          `- ${data.tagged} with tags\n` +
+                          `- ${data.uncategorized} uncategorized\n\n` +
+                          `This will download a ${format.toUpperCase()} file.`;
+            
+            if (confirm(message)) {
+                performExport(format);
+            }
+        });
+}
+
+async function performExport(format) {
+    try {
+        const response = await fetch(`/export/${format}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                post_ids: 'all',
+                include_categories: true,
+                include_tags: true
+            })
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `instagram_posts_${new Date().toISOString().split('T')[0]}.${format}`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            alert(`✓ Exported successfully as ${format.toUpperCase()}!`);
+        } else {
+            alert('Export failed. Please try again.');
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+    }
+}
+</script>
+{% endblock %}

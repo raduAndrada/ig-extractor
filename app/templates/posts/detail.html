@@ -1,0 +1,462 @@
+{% extends "base.html" %}
+
+{% block title %}{{ post.owner_username }}'s Post - Instagram Organizer{% endblock %}
+
+{% block content %}
+<div class="post-detail">
+    <div class="back-link">
+        <a href="{{ url_for('posts.list_posts') }}">← Back to Posts</a>
+    </div>
+
+    <div class="post-container">
+        <div class="post-media">
+            {% if post.thumbnail_path %}
+            <img src="/{{ post.thumbnail_path }}" alt="Post image">
+            {% else %}
+            <div class="no-image-large">📷 No Image</div>
+            {% endif %}
+            <a href="{{ post.post_url }}" target="_blank" class="btn btn-primary">View on Instagram →</a>
+        </div>
+
+        <div class="post-sidebar">
+            <div class="post-owner">
+                <h2>@{{ post.owner_username }}</h2>
+                {% if post.owner_fullname %}
+                <p>{{ post.owner_fullname }}</p>
+                {% endif %}
+            </div>
+
+            <div class="post-stats">
+                <div><strong>❤️ {{ post.likes_count }}</strong> likes</div>
+                <div><strong>💬 {{ post.comments_count }}</strong> comments</div>
+                <div><strong>💾</strong> Saved {{ post.saved_at.strftime('%Y-%m-%d') }}</div>
+            </div>
+
+            <div class="post-caption">
+                <h3>Caption</h3>
+                <p>{{ post.caption or 'No caption' }}</p>
+            </div>
+
+            {% if post.is_recipe %}
+            <div class="recipe-section">
+                <h3>🍳 Recipe Details</h3>
+                
+                {% if post.recipe_ingredients %}
+                <div class="recipe-subsection">
+                    <h4>Ingredients:</h4>
+                    <ul class="ingredients-list">
+                        {% for ingredient in post.recipe_ingredients|from_json %}
+                        <li>{{ ingredient }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                
+                {% if post.recipe_directions %}
+                <div class="recipe-subsection">
+                    <h4>Directions:</h4>
+                    <ol class="directions-list">
+                        {% for direction in post.recipe_directions|from_json %}
+                        <li>{{ direction }}</li>
+                        {% endfor %}
+                    </ol>
+                </div>
+                {% endif %}
+                
+                <button class="btn btn-secondary" onclick="editRecipe()">✏️ Edit Recipe</button>
+            </div>
+            {% else %}
+            <div class="recipe-parse-section">
+                <button class="btn btn-recipe" onclick="parseRecipe()">🍳 Parse Recipe</button>
+                <p class="help-text">Extract ingredients and directions from caption</p>
+            </div>
+            {% endif %}
+
+            <div class="post-categories-section">
+                <h3>Categories</h3>
+                <div class="categories-list">
+                    {% for category in post.categories %}
+                    <span class="category-badge" style="background-color: {{ category.color }}">
+                        {{ category.name }}
+                        <button onclick="removeCategory({{ post.id }}, {{ category.id }})" class="remove-btn">×</button>
+                    </span>
+                    {% endfor %}
+                </div>
+                <button class="btn" onclick="showCategoryModal()">Add Category</button>
+                <button class="btn btn-ai" onclick="getSuggestions()">🤖 AI Suggest</button>
+            </div>
+
+            <div id="aiSuggestions" class="ai-suggestions" style="display: none;">
+                <h4>AI Suggestions</h4>
+                <div id="suggestionsList"></div>
+            </div>
+
+            <div class="post-tags-section">
+                <h3>Tags</h3>
+                <div class="tags-list" id="tagsList">
+                    {% for tag in post.tags %}
+                    <span class="tag-badge">
+                        #{{ tag.name }}
+                        <button onclick="removeTag({{ post.id }}, {{ tag.id }})" class="remove-btn">×</button>
+                    </span>
+                    {% endfor %}
+                </div>
+                <button class="btn" onclick="showTagModal()">Add Tag</button>
+                <button class="btn btn-ai" onclick="extractTags()">🤖 AI Extract</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.btn-ai {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+}
+
+.btn-ai:hover {
+    opacity: 0.9;
+}
+
+.ai-suggestions {
+    background: #F3F4F6;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-top: 1rem;
+}
+
+.ai-suggestions h4 {
+    margin-bottom: 0.5rem;
+    color: #764ba2;
+}
+
+.suggestion-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background: white;
+    border-radius: 0.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.suggestion-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.confidence-badge {
+    background: #667eea;
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+}
+
+.btn-accept {
+    background: #10B981;
+    color: white;
+    border: none;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+}
+
+.btn-accept:hover {
+    background: #059669;
+}
+
+.btn-recipe {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    border: none;
+    font-weight: bold;
+}
+
+.btn-recipe:hover {
+    opacity: 0.9;
+}
+
+.recipe-section {
+    background: #FEF3C7;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-top: 1rem;
+    border: 2px solid #F59E0B;
+}
+
+.recipe-section h3 {
+    color: #92400E;
+    margin-bottom: 1rem;
+}
+
+.recipe-subsection {
+    margin-bottom: 1.5rem;
+}
+
+.recipe-subsection h4 {
+    color: #78350F;
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+}
+
+.ingredients-list, .directions-list {
+    background: white;
+    padding: 1rem;
+    border-radius: 0.25rem;
+    margin: 0;
+}
+
+.ingredients-list li, .directions-list li {
+    margin-bottom: 0.5rem;
+    line-height: 1.5;
+}
+
+.directions-list {
+    padding-left: 2rem;
+}
+
+.recipe-parse-section {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #F3F4F6;
+    border-radius: 0.5rem;
+    text-align: center;
+}
+
+.recipe-parse-section .help-text {
+    margin-top: 0.5rem;
+    color: #6B7280;
+    font-size: 0.875rem;
+}
+</style>
+
+<script>
+const postId = {{ post.id }};
+
+async function getSuggestions() {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '⏳ Analyzing...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch(`/ai/suggest-categories/${postId}`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (data.success && data.suggestions.length > 0) {
+            displaySuggestions(data.suggestions);
+        } else {
+            alert(data.error || 'No suggestions found');
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+}
+
+function displaySuggestions(suggestions) {
+    const container = document.getElementById('aiSuggestions');
+    const list = document.getElementById('suggestionsList');
+    
+    let html = '';
+    suggestions.forEach(sug => {
+        const confidence = (sug.confidence * 100).toFixed(0);
+        html += `
+            <div class="suggestion-item">
+                <div class="suggestion-info">
+                    <span><strong>${sug.category}</strong></span>
+                    <span class="confidence-badge">${confidence}% match</span>
+                </div>
+                <button class="btn-accept" onclick="acceptSuggestion('${sug.category}')">
+                    ✓ Apply
+                </button>
+            </div>
+        `;
+    });
+    
+    list.innerHTML = html;
+    container.style.display = 'block';
+}
+
+async function acceptSuggestion(category) {
+    try {
+        const response = await fetch(`/ai/accept-suggestion/${postId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`✓ Applied category: ${category}`);
+            location.reload();
+        } else {
+            alert(data.error || 'Failed to apply category');
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+    }
+}
+
+async function extractTags() {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '⏳ Extracting...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch(`/ai/extract-tags/${postId}`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (data.success && data.tags.length > 0) {
+            const message = `Found ${data.tags.length} tags:\n\n${data.tags.join(', ')}\n\nAdd these tags?`;
+            if (confirm(message)) {
+                // Create tags via batch endpoint
+                const createResponse = await fetch('/ai/batch-extract-tags', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        post_ids: [postId],
+                        auto_create: true
+                    })
+                });
+                
+                const createData = await createResponse.json();
+                if (createData.success) {
+                    alert(`✓ Added ${data.tags.length} tags!`);
+                    location.reload();
+                }
+            }
+        } else {
+            alert('No tags extracted');
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+}
+
+function showCategoryModal() {
+    // Simple implementation - in production, use a proper modal
+    const categories = {{ categories_json|tojson }};
+    const categoryNames = categories.map(c => c.name);
+    const selected = prompt(`Available categories:\n${categoryNames.join('\n')}\n\nEnter category name:`);
+    
+    if (selected) {
+        const category = categories.find(c => c.name.toLowerCase() === selected.toLowerCase());
+        if (category) {
+            addCategory(category.id);
+        } else {
+            alert('Category not found');
+        }
+    }
+}
+
+function showTagModal() {
+    const tagName = prompt('Enter tag name (without #):');
+    if (tagName) {
+        addTag(tagName);
+    }
+}
+
+async function addCategory(categoryId) {
+    try {
+        const response = await fetch(`/posts/${postId}/categorize`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: categoryId,
+                action: 'add'
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to add category');
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+    }
+}
+
+async function addTag(tagName) {
+    // Create/add tag implementation
+    alert('Tag add functionality - to be fully implemented in UI');
+}
+
+async function removeCategory(postId, categoryId) {
+    if (!confirm('Remove this category?')) return;
+    
+    try {
+        const response = await fetch(`/posts/${postId}/categorize`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                category_id: categoryId,
+                action: 'remove'
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to remove category');
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+    }
+}
+
+async function removeTag(postId, tagId) {
+    if (!confirm('Remove this tag?')) return;
+    alert('Tag removal - to be fully implemented');
+}
+
+async function parseRecipe() {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '⏳ Parsing...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch(`/recipes/parse/${postId}`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (data.success && data.is_recipe) {
+            alert(`✓ ${data.message}\n\nIngredients: ${data.ingredients.length}\nSteps: ${data.directions.length}\n\nReloading to show recipe...`);
+            location.reload();
+        } else if (data.success && !data.is_recipe) {
+            alert('No recipe detected in this caption. Make sure the caption includes ingredients and cooking steps.');
+        } else {
+            alert(data.error || 'Failed to parse recipe');
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+}
+
+function editRecipe() {
+    alert('Recipe editing - advanced feature coming soon!');
+}
+</script>
+{% endblock %}
