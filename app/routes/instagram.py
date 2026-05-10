@@ -1,6 +1,9 @@
 """Instagram authentication routes."""
-from flask import Blueprint, request, jsonify, session, current_app
+from flask import Blueprint, request, jsonify, current_app
+from flask_login import login_required, current_user
+from app import db
 from app.services.instagram_service import InstagramService
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -9,8 +12,9 @@ bp = Blueprint('instagram', __name__, url_prefix='/instagram')
 
 
 @bp.route('/login', methods=['POST'])
+@login_required
 def login():
-    """Login to Instagram."""
+    """Login to Instagram and link to current user."""
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
@@ -25,14 +29,16 @@ def login():
     result = instagram_service.login(username, password)
     
     if result['success']:
-        # Store username in session
-        session['instagram_username'] = username
-        session['instagram_logged_in'] = True
+        # Store Instagram username on user record
+        current_user.instagram_username = username
+        db.session.commit()
+        logger.info(f"User {current_user.username} linked Instagram account: {username}")
     
     return jsonify(result)
 
 
 @bp.route('/login-2fa', methods=['POST'])
+@login_required
 def login_2fa():
     """Complete login with 2FA code."""
     data = request.get_json()
@@ -58,17 +64,19 @@ def login_2fa():
     result = instagram_service.login_with_2fa(username, password, code)
     
     if result['success']:
-        session['instagram_username'] = username
-        session['instagram_logged_in'] = True
+        current_user.instagram_username = username
+        db.session.commit()
+        logger.info(f"User {current_user.username} linked Instagram account: {username} (2FA)")
     
     return jsonify(result)
 
 
 @bp.route('/logout', methods=['POST'])
+@login_required
 def logout():
     """Logout from Instagram."""
-    session.pop('instagram_username', None)
-    session.pop('instagram_logged_in', None)
+    current_user.instagram_username = None
+    db.session.commit()
     
     return jsonify({
         'success': True,
@@ -77,12 +85,12 @@ def logout():
 
 
 @bp.route('/status', methods=['GET'])
+@login_required
 def status():
     """Check Instagram login status."""
-    logged_in = session.get('instagram_logged_in', False)
-    username = session.get('instagram_username', None)
+    username = current_user.instagram_username
     
-    if logged_in and username:
+    if username:
         # Verify session is still valid
         instagram_service = InstagramService()
         try:
@@ -92,12 +100,12 @@ def status():
             is_valid = False
             
         if not is_valid:
-            session.pop('instagram_username', None)
-            session.pop('instagram_logged_in', None)
-            logged_in = False
+            current_user.instagram_username = None
+            db.session.commit()
             username = None
     
     return jsonify({
-        'logged_in': logged_in,
-        'username': username
+        'logged_in': username is not None,
+        'username': username,
+        'last_synced': current_user.instagram_synced_at.isoformat() if current_user.instagram_synced_at else None
     })

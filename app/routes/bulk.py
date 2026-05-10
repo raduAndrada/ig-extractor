@@ -1,5 +1,6 @@
 """Bulk operations routes."""
 from flask import Blueprint, jsonify, request
+from flask_login import login_required, current_user
 from app import db
 from app.models.post import Post
 from app.models.category import Category
@@ -12,6 +13,7 @@ bp = Blueprint('bulk', __name__, url_prefix='/bulk')
 
 
 @bp.route('/categorize', methods=['POST'])
+@login_required
 def bulk_categorize():
     """Apply category to multiple posts.
     
@@ -34,8 +36,8 @@ def bulk_categorize():
         }), 400
     
     try:
-        posts = Post.query.filter(Post.id.in_(post_ids)).all()
-        category = Category.query.get_or_404(category_id)
+        posts = Post.query.filter(Post.id.in_(post_ids), Post.user_id == current_user.id).all()
+        category = Category.query.filter_by(id=category_id, user_id=current_user.id).first_or_404()
         
         updated = 0
         

@@ -9,11 +9,18 @@ class Category(db.Model):
     __tablename__ = 'categories'
     
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    
+    name = db.Column(db.String(100), nullable=False, index=True)
     color = db.Column(db.String(7), default='#3B82F6')  # Hex color code
     description = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Unique constraint: one category name per user
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'name', name='_user_category_uc'),
+    )
     
     def __repr__(self):
         return f'<Category {self.name}>'
@@ -22,6 +29,7 @@ class Category(db.Model):
         """Convert category to dictionary."""
         return {
             'id': self.id,
+            'user_id': self.user_id,
             'name': self.name,
             'color': self.color,
             'description': self.description,

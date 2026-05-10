@@ -130,10 +130,11 @@ class InstagramService:
         except:
             return False
     
-    def fetch_saved_posts(self, max_posts=None, progress_callback=None):
-        """Fetch saved posts from Instagram.
+    def fetch_saved_posts(self, user_id, max_posts=None, progress_callback=None):
+        """Fetch saved posts from Instagram for a specific user.
         
         Args:
+            user_id: Database user ID to associate posts with
             max_posts: Maximum number of posts to fetch (None for all)
             progress_callback: Optional callback function(current, total, post_shortcode)
             
@@ -164,7 +165,7 @@ class InstagramService:
             skipped_count = 0
             delay = current_app.config.get('FETCH_DELAY_SECONDS', 5)
             
-            logger.info(f"Starting to fetch up to {max_posts} saved posts")
+            logger.info(f"Starting to fetch up to {max_posts} saved posts for user_id {user_id}")
             
             for post in saved_posts:
                 if count >= max_posts:
@@ -173,8 +174,8 @@ class InstagramService:
                 
                 count += 1
                 
-                # Check if post already exists
-                existing = Post.query.filter_by(instagram_id=str(post.mediaid)).first()
+                # Check if post already exists for this user
+                existing = Post.query.filter_by(instagram_id=str(post.mediaid), user_id=user_id).first()
                 if existing:
                     skipped_count += 1
                     logger.debug(f"Skipping existing post: {post.shortcode}")
@@ -182,12 +183,12 @@ class InstagramService:
                         progress_callback(count, max_posts, post.shortcode, 'skipped')
                     continue
                 
-                # Create and save new post
+                # Create and save new post for this user
                 try:
-                    new_post = self._create_post_from_insta(post)
+                    new_post = self._create_post_from_insta(post, user_id)
                     db.session.add(new_post)
                     new_count += 1
-                    logger.info(f"Added new post: {post.shortcode}")
+                    logger.info(f"Added new post: {post.shortcode} for user_id {user_id}")
                     
                     if progress_callback:
                         progress_callback(count, max_posts, post.shortcode, 'added')
@@ -229,11 +230,12 @@ class InstagramService:
                 'message': f'Error: {str(e)}'
             }
     
-    def _create_post_from_insta(self, post):
+    def _create_post_from_insta(self, post, user_id):
         """Create Post model from Instaloader post.
         
         Args:
             post: Instaloader Post object
+            user_id: Database user ID to associate post with
             
         Returns:
             Post: New Post instance
@@ -250,6 +252,7 @@ class InstagramService:
             media_type = 'photo'
         
         return Post(
+            user_id=user_id,
             instagram_id=str(post.mediaid),
             shortcode=post.shortcode,
             caption=post.caption or '',

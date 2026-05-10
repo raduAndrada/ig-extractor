@@ -12,11 +12,20 @@
         <div class="container">
             <a href="{{ url_for('main.index') }}" class="logo">📸 IG Organizer</a>
             <ul class="nav-menu">
-                <li><a href="{{ url_for('main.index') }}">Dashboard</a></li>
-                <li><a href="{{ url_for('posts.list_posts') }}">Posts</a></li>
-                <li><a href="{{ url_for('categories.list_categories') }}">Categories</a></li>
-                <li><a href="{{ url_for('main.search') }}">Search</a></li>
-                <li><a href="{{ url_for('main.settings') }}">Settings</a></li>
+                {% if current_user.is_authenticated %}
+                    <li><a href="{{ url_for('main.index') }}">Dashboard</a></li>
+                    <li><a href="{{ url_for('posts.list_posts') }}">Posts</a></li>
+                    <li><a href="{{ url_for('categories.list_categories') }}">Categories</a></li>
+                    <li><a href="{{ url_for('main.search') }}">Search</a></li>
+                    <li><a href="{{ url_for('main.settings') }}">Settings</a></li>
+                    <li class="user-nav">
+                        <span class="username">👤 {{ current_user.username }}</span>
+                        <a href="{{ url_for('auth.logout') }}" class="logout">Logout</a>
+                    </li>
+                {% else %}
+                    <li><a href="{{ url_for('auth.login') }}">Login</a></li>
+                    <li><a href="{{ url_for('auth.signup') }}">Sign Up</a></li>
+                {% endif %}
             </ul>
         </div>
     </nav>

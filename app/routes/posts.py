@@ -1,5 +1,6 @@
 """Posts routes blueprint."""
-from flask import Blueprint, render_template, jsonify, request, current_app, session
+from flask import Blueprint, render_template, jsonify, request, current_app
+from flask_login import login_required, current_user
 from app import db
 from app.models.post import Post
 from app.models.category import Category
@@ -13,6 +14,7 @@ bp = Blueprint('posts', __name__, url_prefix='/posts')
 
 
 @bp.route('/')
+@login_required
 def list_posts():
     """List all posts with optional filters."""
     page = request.args.get('page', 1, type=int)
@@ -20,16 +22,14 @@ def list_posts():
     search = request.args.get('search', '')
     category_id = request.args.get('category', type=int)
     
-    query = Post.query
+    query = Post.query.filter_by(user_id=current_user.id)
     
     # Apply search filter using FTS5
     if search:
-        # Use FTS5 for full-text search
         post_ids = search_posts_fts(search, limit=1000)
         if post_ids:
             query = query.filter(Post.id.in_(post_ids))
         else:
-            # Fallback to LIKE search if FTS fails
             query = query.filter(
                 db.or_(
                     Post.caption.contains(search),
@@ -50,10 +50,11 @@ def list_posts():
 
 
 @bp.route('/<int:post_id>')
+@login_required
 def view_post(post_id):
     """View single post detail."""
-    post = Post.query.get_or_404(post_id)
-    available_categories = Category.query.all()
+    post = Post.query.filter_by(id=post_id, user_id=current_user.id).first_or_404()
+    available_categories = Category.query.filter_by(user_id=current_user.id).all()
     
     # Convert categories to simple dicts for JavaScript
     categories_json = [{'id': c.id, 'name': c.name, 'color': c.color} for c in available_categories]
@@ -65,35 +66,46 @@ def view_post(post_id):
 
 
 @bp.route('/fetch', methods=['POST'])
+@login_required
 def fetch_posts():
     """Trigger fetching new posts from Instagram."""
-    # Check if logged in
-    if not session.get('instagram_logged_in'):
-        return jsonify({
-            'success': False,
-            'error': 'Not logged in to Instagram. Please login first in Settings.'
-        }), 401
-    
-    username = session.get('instagram_username')
-    
     try:
         data = request.get_json() or {}
         max_posts = data.get('max_posts', current_app.config.get('MAX_POSTS_PER_FETCH', 50))
         
         instagram_service = InstagramService()
         
-        # Load existing session
+        # Check if user has synced before
+        if not current_user.instagram_username:
+            return jsonify({
+                'success': False,
+                'error': 'Please connect your Instagram account first in Settings.'
+            }), 401
+        
+        # Load session for current user
         try:
-            instagram_service.loader.load_session_from_file(username, f"session-{username}")
+            instagram_service.loader.load_session_from_file(
+                current_user.instagram_username, 
+                f"session-{current_user.instagram_username}"
+            )
         except Exception as e:
             logger.error(f"Failed to load session: {e}")
             return jsonify({
                 'success': False,
-                'error': 'Session expired. Please login again.'
+                'error': 'Instagram session expired. Please reconnect in Settings.'
             }), 401
         
-        # Fetch posts
-        result = instagram_service.fetch_saved_posts(max_posts=max_posts)
+        # Fetch posts for current user
+        result = instagram_service.fetch_saved_posts(
+            user_id=current_user.id,
+            max_posts=max_posts
+        )
+        
+        # Update user's last sync time
+        if result.get('success'):
+            from datetime import datetime
+            current_user.instagram_synced_at = datetime.utcnow()
+            db.session.commit()
         
         return jsonify(result)
         
@@ -106,15 +118,15 @@ def fetch_posts():
 
 
 @bp.route('/<int:post_id>/categorize', methods=['POST'])
+@login_required
 def categorize_post(post_id):
     """Add/remove category from post."""
-    post = Post.query.get_or_404(post_id)
+    post = Post.query.filter_by(id=post_id, user_id=current_user.id).first_or_404()
     data = request.get_json()
     category_id = data.get('category_id')
-    action = data.get('action', 'add')  # 'add' or 'remove'
+    action = data.get('action', 'add')
     
-    from app.models.category import Category
-    category = Category.query.get_or_404(category_id)
+    category = Category.query.filter_by(id=category_id, user_id=current_user.id).first_or_404()
     
     try:
         if action == 'add':
@@ -159,6 +171,7 @@ def categorize_post(post_id):
 
 
 @bp.route('/search')
+@login_required
 def search_posts():
     """Full-text search across posts using FTS5."""
     query = request.args.get('q', '')
@@ -167,16 +180,15 @@ def search_posts():
         return jsonify({'posts': []})
     
     try:
-        # Use FTS5 for search
         post_ids = search_posts_fts(query, limit=50)
         
         if not post_ids:
             return jsonify({'posts': []})
         
-        # Fetch posts in the order returned by FTS (by relevance)
+        # Fetch posts for current user only
         posts = []
         for post_id in post_ids:
-            post = Post.query.get(post_id)
+            post = Post.query.filter_by(id=post_id, user_id=current_user.id).first()
             if post:
                 posts.append(post.to_dict())
         
@@ -188,8 +200,7 @@ def search_posts():
         
     except Exception as e:
         logger.error(f"Search failed: {e}")
-        # Fallback to basic search
-        posts = Post.query.filter(
+        posts = Post.query.filter_by(user_id=current_user.id).filter(
             db.or_(
                 Post.caption.contains(query),
                 Post.owner_username.contains(query)
@@ -205,15 +216,15 @@ def search_posts():
 
 
 @bp.route('/stats')
+@login_required
 def stats():
-    """Get post statistics."""
-    total = Post.query.count()
-    uncategorized = Post.query.filter(~Post.categories.any()).count()
+    """Get post statistics for current user."""
+    total = Post.query.filter_by(user_id=current_user.id).count()
+    uncategorized = Post.query.filter_by(user_id=current_user.id).filter(~Post.categories.any()).count()
     
-    # Get posts by media type
-    photos = Post.query.filter_by(media_type='photo').count()
-    videos = Post.query.filter_by(media_type='video').count()
-    carousels = Post.query.filter_by(media_type='carousel').count()
+    photos = Post.query.filter_by(user_id=current_user.id, media_type='photo').count()
+    videos = Post.query.filter_by(user_id=current_user.id, media_type='video').count()
+    carousels = Post.query.filter_by(user_id=current_user.id, media_type='carousel').count()
     
     return jsonify({
         'total': total,

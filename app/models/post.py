@@ -9,12 +9,17 @@ class Post(db.Model):
     __tablename__ = 'posts'
     
     id = db.Column(db.Integer, primary_key=True)
-    instagram_id = db.Column(db.String(100), unique=True, nullable=False, index=True)
-    shortcode = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    
+    instagram_id = db.Column(db.String(100), nullable=False, index=True)
+    shortcode = db.Column(db.String(50), nullable=False, index=True)
     caption = db.Column(db.Text)
     post_url = db.Column(db.String(500))
     media_type = db.Column(db.String(20))  # 'photo', 'video', 'carousel'
-    thumbnail_path = db.Column(db.String(500))
+    
+    # Store Instagram CDN URL instead of local file
+    thumbnail_url = db.Column(db.String(500))
+    
     owner_username = db.Column(db.String(100), index=True)
     owner_fullname = db.Column(db.String(200))
     likes_count = db.Column(db.Integer, default=0)
@@ -27,6 +32,11 @@ class Post(db.Model):
     recipe_ingredients = db.Column(db.Text)  # JSON array of ingredients
     recipe_directions = db.Column(db.Text)   # JSON array of directions/steps
     is_recipe = db.Column(db.Boolean, default=False, index=True)
+    
+    # Unique constraint: one post per user
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'instagram_id', name='_user_post_uc'),
+    )
     
     # Relationships
     categories = db.relationship(
@@ -49,12 +59,13 @@ class Post(db.Model):
         
         return {
             'id': self.id,
+            'user_id': self.user_id,
             'instagram_id': self.instagram_id,
             'shortcode': self.shortcode,
             'caption': self.caption,
             'post_url': self.post_url,
             'media_type': self.media_type,
-            'thumbnail_path': self.thumbnail_path,
+            'thumbnail_url': self.thumbnail_url,
             'owner_username': self.owner_username,
             'owner_fullname': self.owner_fullname,
             'likes_count': self.likes_count,

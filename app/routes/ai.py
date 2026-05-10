@@ -1,5 +1,6 @@
 """AI-powered categorization and tagging routes."""
 from flask import Blueprint, jsonify, request, current_app
+from flask_login import login_required, current_user
 from app import db
 from app.models.post import Post
 from app.models.category import Category
@@ -13,6 +14,7 @@ bp = Blueprint('ai', __name__, url_prefix='/ai')
 
 
 @bp.route('/suggest-categories/<int:post_id>', methods=['POST'])
+@login_required
 def suggest_categories(post_id):
     """Get AI category suggestions for a post.
     
@@ -24,10 +26,10 @@ def suggest_categories(post_id):
             ]
         }
     """
-    post = Post.query.get_or_404(post_id)
+    post = Post.query.filter_by(id=post_id, user_id=current_user.id).first_or_404()
     
-    # Get available categories
-    categories = [cat.name for cat in Category.query.all()]
+    # Get available categories for current user
+    categories = [cat.name for cat in Category.query.filter_by(user_id=current_user.id).all()]
     
     if not categories:
         return jsonify({
@@ -62,6 +64,7 @@ def suggest_categories(post_id):
 
 
 @bp.route('/extract-tags/<int:post_id>', methods=['POST'])
+@login_required
 def extract_tags(post_id):
     """Extract tags from a post.
     
@@ -70,7 +73,7 @@ def extract_tags(post_id):
             'tags': ['food', 'recipe', 'delicious', ...]
         }
     """
-    post = Post.query.get_or_404(post_id)
+    post = Post.query.filter_by(id=post_id, user_id=current_user.id).first_or_404()
     
     try:
         ai_service = AIService()
@@ -90,6 +93,7 @@ def extract_tags(post_id):
 
 
 @bp.route('/batch-categorize', methods=['POST'])
+@login_required
 def batch_categorize():
     """Suggest categories for multiple posts.
     
@@ -115,17 +119,14 @@ def batch_categorize():
     threshold = data.get('confidence_threshold', 0.8)
     
     if not post_ids:
-        return jsonify({
-            'success': False,
-            'error': 'No post IDs provided'
-        }), 400
+        # Process all uncategorized posts for current user
+        posts = Post.query.filter_by(user_id=current_user.id).filter(~Post.categories.any()).limit(50).all()
+    else:
+        posts = Post.query.filter(Post.id.in_(post_ids), Post.user_id == current_user.id).all()
     
-    # Get posts
-    posts = Post.query.filter(Post.id.in_(post_ids)).all()
-    
-    # Get available categories
-    categories = [cat.name for cat in Category.query.all()]
-    category_map = {cat.name: cat for cat in Category.query.all()}
+    # Get available categories for current user
+    categories = [cat.name for cat in Category.query.filter_by(user_id=current_user.id).all()]
+    category_map = {cat.name: cat for cat in Category.query.filter_by(user_id=current_user.id).all()}
     
     if not categories:
         return jsonify({

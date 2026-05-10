@@ -2,12 +2,14 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from flask_login import LoginManager
 from config import config
 import logging
 
 # Initialize extensions
 db = SQLAlchemy()
 migrate = Migrate()
+login_manager = LoginManager()
 
 # Configure logging
 logging.basicConfig(
@@ -39,9 +41,20 @@ def create_app(config_name='default'):
     db.init_app(app)
     migrate.init_app(app, db)
     
+    # Initialize Flask-Login
+    login_manager.init_app(app)
+    login_manager.login_view = 'auth.login'
+    login_manager.login_message = 'Please log in to access this page.'
+    login_manager.login_message_category = 'info'
+    
+    @login_manager.user_loader
+    def load_user(user_id):
+        from app.models.user import User
+        return User.query.get(int(user_id))
+    
     # Import models to ensure they're registered with SQLAlchemy
     with app.app_context():
-        from app.models import Post, Category, Tag
+        from app.models import User, Post, Category, Tag
         
         # Create database tables
         db.create_all()
@@ -54,7 +67,7 @@ def create_app(config_name='default'):
             app.logger.warning(f"FTS5 setup skipped: {e}")
     
     # Register blueprints
-    from app.routes import main, posts, categories, instagram, database, ai, export, bulk, recipes
+    from app.routes import main, posts, categories, instagram, database, ai, export, bulk, recipes, auth
     app.register_blueprint(main.bp)
     app.register_blueprint(posts.bp)
     app.register_blueprint(categories.bp)
@@ -64,5 +77,6 @@ def create_app(config_name='default'):
     app.register_blueprint(export.bp)
     app.register_blueprint(bulk.bp)
     app.register_blueprint(recipes.bp)
+    app.register_blueprint(auth.bp)
     
     return app

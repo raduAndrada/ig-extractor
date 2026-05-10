@@ -1,5 +1,6 @@
 """Recipe routes blueprint."""
 from flask import Blueprint, render_template, jsonify, request
+from flask_login import login_required, current_user
 from app import db
 from app.models.post import Post
 from app.services.recipe_parser import RecipeParser
@@ -12,9 +13,10 @@ bp = Blueprint('recipes', __name__, url_prefix='/recipes')
 
 
 @bp.route('/parse/<int:post_id>', methods=['POST'])
+@login_required
 def parse_recipe(post_id):
     """Parse recipe from post caption."""
-    post = Post.query.get_or_404(post_id)
+    post = Post.query.filter_by(id=post_id, user_id=current_user.id).first_or_404()
     
     if not post.caption:
         return jsonify({
@@ -56,19 +58,21 @@ def parse_recipe(post_id):
 
 
 @bp.route('/batch-parse', methods=['POST'])
+@login_required
 def batch_parse():
     """Parse recipes for multiple posts."""
     data = request.get_json()
     post_ids = data.get('post_ids', [])
     
     if not post_ids:
-        # Parse all uncategorized food-related posts
+        # Parse all uncategorized food-related posts for current user
         posts = Post.query.filter(
+            Post.user_id == current_user.id,
             Post.is_recipe == False,
             Post.caption.isnot(None)
         ).limit(100).all()
     else:
-        posts = Post.query.filter(Post.id.in_(post_ids)).all()
+        posts = Post.query.filter(Post.id.in_(post_ids), Post.user_id == current_user.id).all()
     
     parser = RecipeParser()
     results = {
@@ -99,9 +103,10 @@ def batch_parse():
 
 
 @bp.route('/update/<int:post_id>', methods=['POST'])
+@login_required
 def update_recipe(post_id):
     """Manually update recipe ingredients and directions."""
-    post = Post.query.get_or_404(post_id)
+    post = Post.query.filter_by(id=post_id, user_id=current_user.id).first_or_404()
     data = request.get_json()
     
     try:
@@ -128,12 +133,13 @@ def update_recipe(post_id):
 
 
 @bp.route('/list')
+@login_required
 def list_recipes():
     """List all posts marked as recipes."""
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     
-    posts = Post.query.filter_by(is_recipe=True).order_by(
+    posts = Post.query.filter_by(user_id=current_user.id, is_recipe=True).order_by(
         Post.saved_at.desc()
     ).paginate(page=page, per_page=per_page, error_out=False)
     
@@ -141,9 +147,10 @@ def list_recipes():
 
 
 @bp.route('/<int:post_id>')
+@login_required
 def view_recipe(post_id):
     """View recipe detail."""
-    post = Post.query.get_or_404(post_id)
+    post = Post.query.filter_by(id=post_id, user_id=current_user.id).first_or_404()
     
     if not post.is_recipe:
         return jsonify({

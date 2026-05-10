@@ -1,5 +1,6 @@
 """Export and bulk operations routes."""
 from flask import Blueprint, jsonify, request, send_file
+from flask_login import login_required, current_user
 from app import db
 from app.models.post import Post
 from app.models.category import Category
@@ -16,6 +17,7 @@ bp = Blueprint('export', __name__, url_prefix='/export')
 
 
 @bp.route('/json', methods=['POST'])
+@login_required
 def export_json():
     """Export posts to JSON format.
     
@@ -32,11 +34,11 @@ def export_json():
     include_tags = data.get('include_tags', True)
     
     try:
-        # Get posts
+        # Get posts for current user only
         if post_ids == 'all':
-            posts = Post.query.all()
+            posts = Post.query.filter_by(user_id=current_user.id).all()
         else:
-            posts = Post.query.filter(Post.id.in_(post_ids)).all()
+            posts = Post.query.filter(Post.id.in_(post_ids), Post.user_id == current_user.id).all()
         
         # Build export data
         export_data = {

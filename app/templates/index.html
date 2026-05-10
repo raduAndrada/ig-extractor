@@ -3,8 +3,13 @@
 {% block content %}
 <div class="dashboard">
     <div class="header">
-        <h1>📱 Instagram Saved Posts</h1>
-        <p class="subtitle">Organize and search your saved Instagram posts</p>
+        <h1>👋 Welcome, {{ current_user.username }}!</h1>
+        <p class="subtitle">{{ current_user.email }}</p>
+        {% if current_user.instagram_synced_at %}
+            <p style="color: #10B981; margin-top: 0.5rem;">✅ Last synced: {{ current_user.instagram_synced_at.strftime('%B %d, %Y at %I:%M %p') }}</p>
+        {% else %}
+            <p style="color: #F59E0B; margin-top: 0.5rem;">⚠️ Not synced yet. Connect Instagram to start!</p>
+        {% endif %}
     </div>
 
     <!-- Login Status Banner -->
