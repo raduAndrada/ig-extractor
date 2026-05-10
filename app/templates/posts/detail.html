@@ -10,8 +10,8 @@
 
     <div class="post-container">
         <div class="post-media">
-            {% if post.thumbnail_path %}
-            <img src="/{{ post.thumbnail_path }}" alt="Post image">
+            {% if post.thumbnail_url %}
+            <img src="/{{ post.thumbnail_url }}" alt="Post image">
             {% else %}
             <div class="no-image-large">📷 No Image</div>
             {% endif %}

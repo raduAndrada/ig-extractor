@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Style Test</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="logo">📸 IG Organizer</a>
+            <button class="mobile-menu-toggle" id="menuToggle">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <ul class="nav-menu" id="navMenu">
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/posts">Posts</a></li>
+                <li><a href="/categories">Categories</a></li>
+            </ul>
+        </div>
+    </nav>
+    
+    <div class="container">
+        <div class="alert alert-success">✅ Styles are working!</div>
+        
+        <div class="card">
+            <h3>Test Card</h3>
+            <p>If you can see this styled card with a white background and shadow, your CSS is loading correctly!</p>
+            <button class="btn btn-primary">Primary Button</button>
+            <button class="btn">Default Button</button>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>42</h3>
+                <p>Posts</p>
+            </div>
+            <div class="stat-card">
+                <h3>12</h3>
+                <p>Categories</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('menuToggle').addEventListener('click', function() {
+            document.getElementById('navMenu').classList.toggle('active');
+            this.classList.toggle('active');
+        });
+    </script>
+</body>
+</html>

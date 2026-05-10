@@ -1,20 +1,17 @@
 """Database migration utilities and FTS5 search setup."""
 from app import db
+from sqlalchemy import text
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 def create_fts_table():
-    """Create FTS5 virtual table for full-text search.
-    
-    This creates a virtual table that indexes post captions and owner usernames
-    for lightning-fast full-text search.
-    """
+    """Create FTS5 virtual table for full-text search."""
     try:
         # Check if FTS table already exists
         result = db.session.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='posts_fts'"
+            text("SELECT name FROM sqlite_master WHERE type='table' AND name='posts_fts'")
         ).fetchone()
         
         if result:
@@ -22,7 +19,7 @@ def create_fts_table():
             return True
         
         # Create FTS5 virtual table
-        db.session.execute("""
+        db.session.execute(text("""
             CREATE VIRTUAL TABLE posts_fts USING fts5(
                 post_id UNINDEXED,
                 caption,
@@ -30,39 +27,35 @@ def create_fts_table():
                 content='posts',
                 content_rowid='id'
             )
-        """)
+        """))
         
-        # Create triggers to keep FTS table in sync
-        
-        # INSERT trigger
-        db.session.execute("""
+        # Create triggers
+        db.session.execute(text("""
             CREATE TRIGGER posts_fts_insert AFTER INSERT ON posts BEGIN
                 INSERT INTO posts_fts(rowid, post_id, caption, owner_username)
                 VALUES (new.id, new.id, new.caption, new.owner_username);
             END;
-        """)
+        """))
         
-        # UPDATE trigger
-        db.session.execute("""
+        db.session.execute(text("""
             CREATE TRIGGER posts_fts_update AFTER UPDATE ON posts BEGIN
                 UPDATE posts_fts 
                 SET caption = new.caption, owner_username = new.owner_username
                 WHERE rowid = old.id;
             END;
-        """)
+        """))
         
-        # DELETE trigger
-        db.session.execute("""
+        db.session.execute(text("""
             CREATE TRIGGER posts_fts_delete AFTER DELETE ON posts BEGIN
                 DELETE FROM posts_fts WHERE rowid = old.id;
             END;
-        """)
+        """))
         
         # Populate with existing data
-        db.session.execute("""
+        db.session.execute(text("""
             INSERT INTO posts_fts(rowid, post_id, caption, owner_username)
             SELECT id, id, caption, owner_username FROM posts
-        """)
+        """))
         
         db.session.commit()
         logger.info("FTS5 table and triggers created successfully")
@@ -77,10 +70,10 @@ def create_fts_table():
 def drop_fts_table():
     """Drop FTS5 table and triggers."""
     try:
-        db.session.execute("DROP TRIGGER IF EXISTS posts_fts_insert")
-        db.session.execute("DROP TRIGGER IF EXISTS posts_fts_update")
-        db.session.execute("DROP TRIGGER IF EXISTS posts_fts_delete")
-        db.session.execute("DROP TABLE IF EXISTS posts_fts")
+        db.session.execute(text("DROP TRIGGER IF EXISTS posts_fts_insert"))
+        db.session.execute(text("DROP TRIGGER IF EXISTS posts_fts_update"))
+        db.session.execute(text("DROP TRIGGER IF EXISTS posts_fts_delete"))
+        db.session.execute(text("DROP TABLE IF EXISTS posts_fts"))
         db.session.commit()
         logger.info("FTS table and triggers dropped")
         return True
@@ -91,20 +84,13 @@ def drop_fts_table():
 
 
 def rebuild_fts_index():
-    """Rebuild the FTS index from scratch.
-    
-    Useful if the index gets out of sync or corrupted.
-    """
+    """Rebuild FTS5 index from scratch."""
     try:
-        # Clear existing FTS data
-        db.session.execute("DELETE FROM posts_fts")
-        
-        # Repopulate
-        db.session.execute("""
+        db.session.execute(text("DELETE FROM posts_fts"))
+        db.session.execute(text("""
             INSERT INTO posts_fts(rowid, post_id, caption, owner_username)
             SELECT id, id, caption, owner_username FROM posts
-        """)
-        
+        """))
         db.session.commit()
         logger.info("FTS index rebuilt successfully")
         return True
@@ -115,26 +101,16 @@ def rebuild_fts_index():
 
 
 def search_posts_fts(query, limit=50):
-    """Search posts using FTS5.
-    
-    Args:
-        query: Search query string
-        limit: Maximum number of results
-        
-    Returns:
-        List of post IDs matching the query, ordered by relevance
-    """
+    """Search posts using FTS5."""
     try:
-        # Use FTS5 MATCH for full-text search
-        # The '-rank' orders by relevance (best matches first)
         result = db.session.execute(
-            """
-            SELECT post_id, rank 
-            FROM posts_fts 
-            WHERE posts_fts MATCH :query 
-            ORDER BY rank 
-            LIMIT :limit
-            """,
+            text("""
+                SELECT rowid 
+                FROM posts_fts 
+                WHERE posts_fts MATCH :query 
+                ORDER BY rank 
+                LIMIT :limit
+            """),
             {'query': query, 'limit': limit}
         ).fetchall()
         
@@ -146,23 +122,20 @@ def search_posts_fts(query, limit=50):
 
 
 def get_fts_stats():
-    """Get statistics about the FTS index.
-    
-    Returns:
-        dict: Statistics including index size and row count
-    """
+    """Get statistics about the FTS index."""
     try:
         count = db.session.execute(
-            "SELECT COUNT(*) FROM posts_fts"
-        ).scalar()
+            text("SELECT COUNT(*) FROM posts_fts")
+        ).fetchone()[0]
         
         return {
-            'indexed_posts': count,
-            'status': 'active'
+            'row_count': count,
+            'enabled': True
         }
     except Exception as e:
         logger.error(f"Failed to get FTS stats: {e}")
         return {
-            'indexed_posts': 0,
-            'status': 'error'
+            'row_count': 0,
+            'enabled': False,
+            'error': str(e)
         }

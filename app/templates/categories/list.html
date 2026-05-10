@@ -13,19 +13,21 @@
         {% if categories %}
             {% for category in categories %}
             <div class="category-card">
-                <div class="category-color" style="background-color: {{ category.color }}"></div>
-                <div class="category-info">
-                    <h3>{{ category.name }}</h3>
-                    {% if category.description %}
-                    <p>{{ category.description }}</p>
-                    {% endif %}
-                    <div class="category-stats">
-                        <span>{{ category.posts.count() }} posts</span>
+                <a href="{{ url_for('posts.list_posts', category=category.id) }}" style="text-decoration: none; color: inherit; display: block;">
+                    <div class="category-color" style="background-color: {{ category.color }}"></div>
+                    <div class="category-info">
+                        <h3>{{ category.name }}</h3>
+                        {% if category.description %}
+                        <p>{{ category.description }}</p>
+                        {% endif %}
+                        <div class="category-stats">
+                            <span>{{ category.posts.count() }} posts</span>
+                        </div>
                     </div>
-                </div>
+                </a>
                 <div class="category-actions">
-                    <button class="btn-icon" onclick="editCategory({{ category.id }})">✏️</button>
-                    <button class="btn-icon" onclick="deleteCategory({{ category.id }})">🗑️</button>
+                    <button class="btn-icon" onclick="event.stopPropagation(); editCategory({{ category.id }})">✏️</button>
+                    <button class="btn-icon" onclick="event.stopPropagation(); deleteCategory({{ category.id }})">🗑️</button>
                 </div>
             </div>
             {% endfor %}

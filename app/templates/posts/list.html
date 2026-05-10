@@ -5,9 +5,18 @@
 {% block content %}
 <div class="posts-page">
     <div class="header">
-        <h1>All Saved Posts</h1>
+        <h1>📸 All Saved Posts</h1>
+        {% if request.args.get('category') %}
+        <div class="alert alert-info" style="background: #e3f2fd; padding: 10px; border-radius: 5px; margin: 10px 0;">
+            🏷️ Filtering by category &nbsp; 
+            <a href="{{ url_for('posts.list_posts') }}" style="background: #2196F3; color: white; padding: 5px 10px; border-radius: 3px; text-decoration: none;">✕ Clear filter</a>
+        </div>
+        {% endif %}
         <div class="header-actions">
             <form action="{{ url_for('posts.list_posts') }}" method="get" class="search-form">
+                {% if request.args.get('category') %}
+                <input type="hidden" name="category" value="{{ request.args.get('category') }}">
+                {% endif %}
                 <input type="text" name="search" value="{{ search }}" placeholder="Search..." class="search-input">
                 <button type="submit" class="btn">Search</button>
             </form>
@@ -19,8 +28,8 @@
             {% for post in posts.items %}
             <div class="post-card" data-post-id="{{ post.id }}">
                 <a href="{{ url_for('posts.view_post', post_id=post.id) }}">
-                    {% if post.thumbnail_path %}
-                    <img src="/{{ post.thumbnail_path }}" alt="Post thumbnail">
+                    {% if post.thumbnail_url %}
+                    <img src="/{{ post.thumbnail_url }}" alt="Post thumbnail">
                     {% else %}
                     <div class="no-image">📷</div>
                     {% endif %}

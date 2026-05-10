@@ -182,8 +182,8 @@ function displayResults(posts, query, isFallback) {
         html += `
             <div class="post-card">
                 <a href="/posts/${post.id}">
-                    ${post.thumbnail_path ? 
-                        `<img src="/${post.thumbnail_path}" alt="Post">` :
+                    ${post.thumbnail_url ? 
+                        `<img src="/${post.thumbnail_url}" alt="Post">` :
                         '<div class="no-image">📷</div>'
                     }
                 </a>

@@ -258,7 +258,7 @@ class InstagramService:
             caption=post.caption or '',
             post_url=f"https://www.instagram.com/p/{post.shortcode}/",
             media_type=media_type,
-            thumbnail_path=thumbnail_path,
+            thumbnail_url=thumbnail_path,  # Using local path for now, can be changed to CDN URL later
             owner_username=post.owner_username,
             owner_fullname=post.owner_profile.full_name if post.owner_profile else '',
             likes_count=post.likes,
