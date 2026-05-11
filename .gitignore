@@ -4,27 +4,29 @@ __pycache__/
 *$py.class
 *.so
 .Python
-venv/
-.venv/
-env/
-ENV/
 *.egg-info/
 dist/
 build/
 
-# Flask
-instance/
-.webassets-cache
+# Virtual Environment
+venv/
+env/
+ENV/
 
-# Database (keep structure, ignore data)
-*.db-journal
-data/instagram_organizer.db
-data/thumbnails/*.jpg
-data/thumbnails/*.jpeg
-data/thumbnails/*.png
-
-# Environment
+# Environment variables
 .env
+.env.local
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+data/instagram_organizer.db
+data/*.db
+
+# Instagram session files
+session-*
 
 # IDE
 .vscode/
@@ -40,9 +42,9 @@ Thumbs.db
 # Logs
 *.log
 
-# Instagram session
-session-*
+# Thumbnails (optional - remove if you want to commit them)
+data/thumbnails/
 
-# Temporary files
-*.tmp
-*.bak
+# Secrets
+config.secret.py
+secrets.py

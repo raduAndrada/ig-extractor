@@ -15,7 +15,12 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
     
     # Database
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
+    DATABASE_URL = os.environ.get('DATABASE_URL')
+    if DATABASE_URL and DATABASE_URL.startswith('postgres://'):
+        # Heroku/old PostgreSQL URLs use postgres://, update to postgresql://
+        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+    
+    SQLALCHEMY_DATABASE_URI = DATABASE_URL or \
         f'sqlite:///{basedir}/data/instagram_organizer.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
@@ -41,6 +46,11 @@ class Config:
     # Ensure directories exist
     DATA_DIR.mkdir(exist_ok=True)
     THUMBNAIL_DIR.mkdir(exist_ok=True)
+    
+    @property
+    def is_postgresql(self):
+        """Check if using PostgreSQL."""
+        return self.SQLALCHEMY_DATABASE_URI.startswith('postgresql://')
 
 
 class DevelopmentConfig(Config):

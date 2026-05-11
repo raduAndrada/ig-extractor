@@ -1,4 +1,4 @@
-"""Database migration utilities and FTS5 search setup."""
+"""Database migration utilities and full-text search setup."""
 from app import db
 from sqlalchemy import text
 import logging
@@ -6,8 +6,25 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def is_postgresql():
+    """Check if using PostgreSQL."""
+    return db.engine.url.drivername == 'postgresql'
+
+
 def create_fts_table():
-    """Create FTS5 virtual table for full-text search."""
+    """Create full-text search table/index for PostgreSQL or SQLite."""
+    try:
+        if is_postgresql():
+            return create_postgres_fts()
+        else:
+            return create_sqlite_fts()
+    except Exception as e:
+        logger.error(f"Failed to create FTS: {e}")
+        return False
+
+
+def create_sqlite_fts():
+    """Create SQLite FTS5 virtual table."""
     try:
         # Check if FTS table already exists
         result = db.session.execute(
@@ -15,7 +32,7 @@ def create_fts_table():
         ).fetchone()
         
         if result:
-            logger.info("FTS table already exists")
+            logger.info("SQLite FTS5 table already exists")
             return True
         
         # Create FTS5 virtual table
@@ -58,39 +75,81 @@ def create_fts_table():
         """))
         
         db.session.commit()
-        logger.info("FTS5 table and triggers created successfully")
+        logger.info("SQLite FTS5 table and triggers created successfully")
         return True
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Failed to create FTS table: {e}")
+        logger.error(f"Failed to create SQLite FTS table: {e}")
+        return False
+
+
+def create_postgres_fts():
+    """Create PostgreSQL full-text search indexes."""
+    try:
+        # Check if index already exists
+        result = db.session.execute(text("""
+            SELECT indexname FROM pg_indexes 
+            WHERE tablename = 'posts' AND indexname = 'posts_fts_idx'
+        """)).fetchone()
+        
+        if result:
+            logger.info("PostgreSQL FTS index already exists")
+            return True
+        
+        # Create GIN index for full-text search
+        # Combines caption and owner_username into searchable text
+        db.session.execute(text("""
+            CREATE INDEX posts_fts_idx ON posts 
+            USING GIN (to_tsvector('english', 
+                COALESCE(caption, '') || ' ' || COALESCE(owner_username, '')
+            ))
+        """))
+        
+        db.session.commit()
+        logger.info("PostgreSQL FTS index created successfully")
+        return True
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Failed to create PostgreSQL FTS index: {e}")
         return False
 
 
 def drop_fts_table():
-    """Drop FTS5 table and triggers."""
+    """Drop full-text search table/index."""
     try:
-        db.session.execute(text("DROP TRIGGER IF EXISTS posts_fts_insert"))
-        db.session.execute(text("DROP TRIGGER IF EXISTS posts_fts_update"))
-        db.session.execute(text("DROP TRIGGER IF EXISTS posts_fts_delete"))
-        db.session.execute(text("DROP TABLE IF EXISTS posts_fts"))
+        if is_postgresql():
+            db.session.execute(text("DROP INDEX IF EXISTS posts_fts_idx"))
+        else:
+            db.session.execute(text("DROP TRIGGER IF EXISTS posts_fts_insert"))
+            db.session.execute(text("DROP TRIGGER IF EXISTS posts_fts_update"))
+            db.session.execute(text("DROP TRIGGER IF EXISTS posts_fts_delete"))
+            db.session.execute(text("DROP TABLE IF EXISTS posts_fts"))
+        
         db.session.commit()
-        logger.info("FTS table and triggers dropped")
+        logger.info("FTS table/index dropped")
         return True
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Failed to drop FTS table: {e}")
+        logger.error(f"Failed to drop FTS: {e}")
         return False
 
 
 def rebuild_fts_index():
-    """Rebuild FTS5 index from scratch."""
+    """Rebuild full-text search index from scratch."""
     try:
-        db.session.execute(text("DELETE FROM posts_fts"))
-        db.session.execute(text("""
-            INSERT INTO posts_fts(rowid, post_id, caption, owner_username)
-            SELECT id, id, caption, owner_username FROM posts
-        """))
+        if is_postgresql():
+            # For PostgreSQL, just reindex
+            db.session.execute(text("REINDEX INDEX posts_fts_idx"))
+        else:
+            # For SQLite, clear and repopulate
+            db.session.execute(text("DELETE FROM posts_fts"))
+            db.session.execute(text("""
+                INSERT INTO posts_fts(rowid, post_id, caption, owner_username)
+                SELECT id, id, caption, owner_username FROM posts
+            """))
+        
         db.session.commit()
         logger.info("FTS index rebuilt successfully")
         return True
@@ -101,7 +160,19 @@ def rebuild_fts_index():
 
 
 def search_posts_fts(query, limit=50):
-    """Search posts using FTS5."""
+    """Search posts using full-text search (PostgreSQL or SQLite)."""
+    try:
+        if is_postgresql():
+            return search_posts_postgres(query, limit)
+        else:
+            return search_posts_sqlite(query, limit)
+    except Exception as e:
+        logger.error(f"FTS search failed: {e}")
+        return []
+
+
+def search_posts_sqlite(query, limit=50):
+    """Search posts using SQLite FTS5."""
     try:
         result = db.session.execute(
             text("""
@@ -117,25 +188,66 @@ def search_posts_fts(query, limit=50):
         return [row[0] for row in result]
         
     except Exception as e:
-        logger.error(f"FTS search failed: {e}")
+        logger.error(f"SQLite FTS search failed: {e}")
+        return []
+
+
+def search_posts_postgres(query, limit=50):
+    """Search posts using PostgreSQL full-text search."""
+    try:
+        result = db.session.execute(
+            text("""
+                SELECT id 
+                FROM posts 
+                WHERE to_tsvector('english', 
+                    COALESCE(caption, '') || ' ' || COALESCE(owner_username, '')
+                ) @@ plainto_tsquery('english', :query)
+                ORDER BY ts_rank(
+                    to_tsvector('english', 
+                        COALESCE(caption, '') || ' ' || COALESCE(owner_username, '')
+                    ),
+                    plainto_tsquery('english', :query)
+                ) DESC
+                LIMIT :limit
+            """),
+            {'query': query, 'limit': limit}
+        ).fetchall()
+        
+        return [row[0] for row in result]
+        
+    except Exception as e:
+        logger.error(f"PostgreSQL FTS search failed: {e}")
         return []
 
 
 def get_fts_stats():
     """Get statistics about the FTS index."""
     try:
-        count = db.session.execute(
-            text("SELECT COUNT(*) FROM posts_fts")
-        ).fetchone()[0]
-        
-        return {
-            'row_count': count,
-            'enabled': True
-        }
+        if is_postgresql():
+            # Check if index exists
+            result = db.session.execute(text("""
+                SELECT indexname FROM pg_indexes 
+                WHERE tablename = 'posts' AND indexname = 'posts_fts_idx'
+            """)).fetchone()
+            
+            return {
+                'enabled': bool(result),
+                'type': 'postgresql',
+                'index_name': 'posts_fts_idx'
+            }
+        else:
+            count = db.session.execute(
+                text("SELECT COUNT(*) FROM posts_fts")
+            ).fetchone()[0]
+            
+            return {
+                'row_count': count,
+                'enabled': True,
+                'type': 'sqlite'
+            }
     except Exception as e:
         logger.error(f"Failed to get FTS stats: {e}")
         return {
-            'row_count': 0,
             'enabled': False,
             'error': str(e)
         }
